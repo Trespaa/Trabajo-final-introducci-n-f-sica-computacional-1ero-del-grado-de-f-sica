@@ -1,0 +1,199 @@
+from numpy import *                      # Importa todas las funciones de numpy  
+import matplotlib.pyplot as plt          # Permite crear gráficas en 2D
+import matplotlib.animation as animation # Permite crear animaciones en matplotlib
+from matplotlib.lines import Line2D      # Representa líneas en 2D.
+
+# Parámetros y constantes 
+m = 300  # masa del coche en kg 
+g = 9.8  # aceleración de la gravedad en m/s^2 
+valoresdemu = [0.0, 0.1, 0.2, 0.3, 1.5]  # coeficientes de rozamiento  
+tf = 50  #tiempo total de la atracción
+dt = 0.1  # tiempo en segundos 
+x = arange(-70, 100)
+ 
+# Función que calcula la curva y(x)
+def curva(x): 
+    return 2 * ((x / 100) ** 3 - 10 * (x / 100) ** 2 + 1) ** 2 
+ 
+# Función que calcula la pendiente de la curva y(x) 
+def pendiente(x):  
+    return x*(3*x-2000)*(x**3-1000*x**2+1000000)/250000000000
+
+def dpendiente(x):
+    return (-400000000 + 1200000*x + 1200000*x**2 - 4000*x**3 + 3*x**4)/50000000000
+
+# Función que realiza la simulación para un coeficiente de rozamiento dado 
+def rozamiento(mu): 
+    x = -70  # posición inicial en x en metros 
+    y = curva(x)  # calcular la posición inicial en y 
+    vx = 0  # velocidad inicial en x en m/s 
+    vy = 0  # velocidad inicial en y en m/s 
+     
+    posicion = [] 
+    velocidad = [] 
+    pesos = []
+    tiempo = arange(0,tf, dt) 
+   
+    for t in tiempo: 
+        # Calcular la normal a la curva en el punto
+        p = pendiente(x) 
+        o = arctan (pendiente(x)) # Ángulo de la tangente a la curva              
+        
+        #Cálculo del radio de curvatura
+        def rcurvatura(x):
+            return (1 + pendiente(x)**2)**(3/2) / dpendiente(x)
+        
+        # Calcular la fuerza de la gravedad y la fuerza de rozamiento y el radio de curvatura
+        rc = rcurvatura(x)                                      # Radio de curvatura
+        v = sqrt(vx**2 + vy**2)                                 # Velocidad
+        peso = m * g                                            # Fuerza de la gravedad                                      
+        N = m * g + m* (v**2/rc)                                 # Fuerza normal
+        Fr = mu * N                                             # Fuerza de rozamiento
+        
+        # Añadir las fg a la lista de fuerzas
+        pesos.append((0, - peso)) 
+
+        # Condición para que el rozamiento siempre frene el coche
+        if vx < 0:
+            Fr = -Fr
+        else:
+            Fr = Fr
+        
+        # Calcular la aceleración en x e y, se consigue despejando las fuerzas
+        ax = (-Fr*cos(o) - N*sin(o) - peso*sin(o))/ m
+        ay = (peso*sin(o) + N*sin(o) + Fr*cos(o)) / m
+        a = sqrt(ax**2 + ay**2)       
+
+# Actualizar velocidades usando el método de Euler-Cromer 
+        vx += ax*dt
+        vy += ay*dt
+        v += a*dt   
+
+
+# Calcular las posiciones actualizadas con el método Euler-Cromer
+        x += vx * dt*cos(o) 
+        y = curva(x)
+
+        posicion.append((x, y)) 
+        velocidad.append((vx, vy))
+        
+        # Cuando el coche se detenga él solo, detener la atracción. 
+        if sqrt(v**2) == 0 or t >= tf:
+             return posicion, velocidad , pesos
+    
+    return array(posicion), array(velocidad), pesos
+
+
+#Representación gráfica de la simulación.
+for mu in valoresdemu:
+    # Crear una figura y un eje
+    fig, ax = plt.subplots()
+
+    # Dibujar la curva
+    x = linspace(-70, 100, 1000)
+    y = curva(x)
+    ax.plot(x, y)
+
+    # Obtener las posiciones y velocidades para los valores de mu
+    posiciones, velocidades, pesos = rozamiento(mu)
+                                     
+    # Dibujar la pelota en la posición inicial
+    pelota, = ax.plot(posiciones[0][0], posiciones[0][1], 'o') #El primer argumento es la posicion inicial 
+                                                           # la o especifica como es el punto a dibujar
+
+    # Dibujar los vectores de velocidad y normal en la posición inicial
+    p = pendiente(posiciones[0][0])
+    nmodulo = sqrt(1 + p**2)
+    normal = array([-p / nmodulo, 1 / nmodulo]) # El vector normal calculado de esta manera 
+                                                # es un vector unitario que apunta en dirección
+                                                # perpendicular a la tangente de la curva en 
+                                                # el punto x, y.
+    vector_velocidad = ax.quiver(posiciones[0][0], posiciones[0][1], velocidades[0][0], 
+                       velocidades[0][1], color='r', angles='xy', scale_units='xy', scale=5)
+    vector_normal = ax.quiver(posiciones[0][0], posiciones[0][1], normal[0], normal[1], color='b',
+                    angles='xy', scale_units='xy', scale=0.05)                                                       
+    vector_peso = ax.quiver(posiciones[0][0], posiciones[0][1], pesos[0][0], 
+                            pesos[0][1], color='g', angles='xy', scale_units='xy', scale=100)
+    # Quiver es una función de matplotlib que dibuja vectores en 2D y 3D
+
+    # Función que que actualiza la posición de la pelota.
+    def animacion(i):
+        pelota.set_data(posiciones[i][0], posiciones[i][1])  # set_data es un método de los objetos en 2D en matplotlib
+                                                             # que establece las coordenadas x e y del objeto.
+        p = pendiente(posiciones[i][0])
+        nmodulo = sqrt(1 + p**2)
+        normal = array([-p / nmodulo, 1 / nmodulo])
+        vector_velocidad.set_UVC(velocidades[i][0], velocidades[i][1])
+        vector_normal.set_UVC(normal[0], normal[1])
+        vector_peso.set_UVC(pesos[i][0], pesos[i][1])
+        
+        # Actualizar la posición de los vectores de velocidad y normal
+        vector_velocidad.set_offsets([posiciones[i][0], posiciones[i][1]])
+        vector_normal.set_offsets([posiciones[i][0], posiciones[i][1]])
+        vector_peso.set_offsets([posiciones[i][0], posiciones[i][1]])
+        vector_peso.set_offsets([posiciones[i][0], posiciones[i][1]])
+
+        return pelota, vector_velocidad, vector_normal, vector_peso,                            
+
+    # Crear una animación para este conjunto de posiciones
+    ani = animation.FuncAnimation(fig, animacion, frames=len(posiciones), interval=20, blit=True)
+    # fig indica el objeto a dibujar
+    # movimiento es la función para cada frame
+    # el número de frames es el número de posiciones
+    # interval es el tiempo entre frames en milisegundos
+    # blit=True indica que sólo se redibujan las partes que cambian en cada frame
+
+    # Añadir etiquetas a los ejes y un título a la gráfica
+    ax.set_xlabel('Longitud (m)')
+    ax.set_ylabel('Altura (m)')
+    ax.set_title(f'Montaña rusa con mu = {mu}')
+
+    # Crear objetos Line2D para la gráfica
+    vector_velocidad_legend = Line2D([0], [0], color='r', lw=2)
+    vector_normal_legend = Line2D([0], [0], color='b', lw=2)
+    vector_peso_legend = Line2D([0], [0], color='g', lw=2)
+
+    # Añadir los objetos Line2D a la leyenda
+    ax.legend([vector_velocidad_legend, vector_normal_legend, vector_peso_legend], ['Vector velocidad', 'Vector normal', 'Vector peso'])
+    
+    # Mostrar la animación
+    plt.show()
+
+# Representación gráfica de la energía en función del tiempo
+for mu in valoresdemu:
+    # Crear las listas para las energías
+    Epot_list = []
+    Ecin_list = []
+    Etot_list = []
+   
+    posiciones, velocidades, pesos = rozamiento(mu)
+
+    # Calcular las energías en cada punto de la simulación
+    for i in range(len(posiciones)):
+        Epot = m*g*curva(posiciones[i][0])  # Cogemos la posición de cada x en la simulación
+        Ecin = 1/2*m*(sqrt(velocidades[i][0]**2 + velocidades[i][1]**2))**2  # Cogemos la velocidad de cada x en la simulación
+        Etot = Ecin + Epot
+
+        # Añadimos cada energía a su lista correspondiente
+        Epot_list.append(Epot)
+        Ecin_list.append(Ecin)
+        Etot_list.append(Etot)
+
+    # Crear una figura y un eje
+    fig, ax = plt.subplots()
+
+    # Dibujar las energías en función del tiempo
+    tiempo = arange(0, tf, dt)
+    ax.plot(tiempo, Epot_list, label='Energía potencial')
+    ax.plot(tiempo, Ecin_list, label='Energía cinética')
+    ax.plot(tiempo, Etot_list, label='Energía total')
+
+    # Añadir etiquetas a los ejes y un título a la gráfica
+    ax.set_xlabel('Tiempo (s)')
+    ax.set_ylabel('Energía (J)')
+    ax.set_title(f'Energía en función del tiempo para mu = {mu}')
+    ax.legend()
+
+    # Mostrar la gráfica
+    plt.show()
+    
